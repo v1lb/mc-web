@@ -113,7 +113,7 @@ export function signalDetail(s) {
 const FAILURE_RESOURCES = {
   UNSUPPORTED_FORMAT: 'error_unsupported_format', UNSUPPORTED_IMAGE: 'failure_unsupported_image', EDIT_JPEG_ONLY: 'failure_edit_jpeg_only',
   WIPE_GPS_UNSUPPORTED: 'failure_wipe_gps_jpeg_png_only', GPS_NOT_REMOVED: 'failure_gps_not_removed', NO_DATE_TO_SHIFT: 'failure_no_date_to_shift',
-  VIDEO_UNSUPPORTED: 'failure_video_unsupported', CLEAN_CHECK_FAILED: 'failure_clean_check_failed', EMPTY_RESULT: 'failure_empty_result',
+  VIDEO_UNSUPPORTED: 'failure_video_unsupported', MALFORMED: 'failure_cannot_read_source', BATCH_PHOTOS_ONLY: 'failure_unsupported_image', CLEAN_CHECK_FAILED: 'failure_clean_check_failed', EMPTY_RESULT: 'failure_empty_result',
   EDIT_UNVERIFIED: 'failure_edit_unverified', DECODE_FAILED: 'failure_decode_failed', ENCODE_FAILED: 'failure_encode_failed',
   PRO_REQUIRED: 'error_pro_required', BATCH_SIZE: 'failure_batch_size', OUT_OF_MEMORY: 'failure_out_of_memory',
 };
@@ -133,7 +133,7 @@ export function errorText(error) {
   if (error?.code === 'TOO_LARGE') return t('web_too_large', error.limitMb);
   const resource = FAILURE_RESOURCES[error?.code];
   if (resource) return t(resource);
-  if (error instanceof RangeError || /memory|allocation/i.test(String(error?.message))) return t('failure_out_of_memory');
+  if (/memory|allocation|array buffer|invalid (typed )?array length/i.test(String(error?.message))) return t('failure_out_of_memory');
   return t('error_operation_failed', t('error_generic'));
 }
 

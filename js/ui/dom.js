@@ -7,12 +7,12 @@ const SVG_TAGS = new Set(['svg', 'path', 'circle', 'line', 'rect', 'g', 'polylin
 export function h(tag, attrs, ...children) {
   const el = SVG_TAGS.has(tag) ? document.createElementNS(SVG_NS, tag) : document.createElement(tag);
   for (const [key, value] of Object.entries(attrs ?? {})) {
-    if (value == null || value === false) continue;
+    if (value == null) continue;
     if (key.startsWith('on')) el.addEventListener(key.slice(2), value);
     else if (key === 'class') el.setAttribute('class', value);
     else if (key === 'dataset') Object.assign(el.dataset, value);
     else if (key in el && !SVG_TAGS.has(tag) && key !== 'list' && key !== 'form') el[key] = value;
-    else el.setAttribute(key, value === true ? '' : value);
+    else if (value !== false) el.setAttribute(key, value === true ? '' : value);
   }
   append(el, children);
   return el;

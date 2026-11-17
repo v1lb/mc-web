@@ -358,3 +358,5 @@ body.is-busy::before { content: ""; position: fixed; left: 0; top: 0; height: 3p
 }
 
 .card > .btn, .card > .row { justify-self: start; }
+
+@media print { .toasts, .dialog { display: none !important; } }

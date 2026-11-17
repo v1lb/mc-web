@@ -42,9 +42,15 @@ function cleanChars(s) {
   return out;
 }
 
+/** Position of the first zero byte in [from, to), or -1. Never looks past the chunk. */
+function indexOfZero(d, from, to) {
+  const at = d.subarray(from, to).indexOf(0);
+  return at < 0 ? -1 : from + at;
+}
+
 async function decodeText(type, d, start, end) {
-  const nul = d.indexOf(0, start);
-  if (nul < 0 || nul >= end || nul === start || nul - start > 79) return null;
+  const nul = indexOfZero(d, start, Math.min(end, start + 80));
+  if (nul < 0 || nul === start) return null;
   const keyword = latin1(d, start, nul - start);
   const rest = nul + 1;
   if (type === 'tEXt') return { keyword, text: cleanChars(latin1(d, rest, end - rest)) };
@@ -56,10 +62,10 @@ async function decodeText(type, d, start, end) {
   if (rest + 2 > end) return null;
   const compressed = d[rest];
   const method = d[rest + 1];
-  const langEnd = d.indexOf(0, rest + 2);
-  if (langEnd < 0 || langEnd >= end) return null;
-  const translatedEnd = d.indexOf(0, langEnd + 1);
-  if (translatedEnd < 0 || translatedEnd >= end) return null;
+  const langEnd = indexOfZero(d, rest + 2, end);
+  if (langEnd < 0) return null;
+  const translatedEnd = indexOfZero(d, langEnd + 1, end);
+  if (translatedEnd < 0) return null;
   const textStart = translatedEnd + 1;
   if (compressed === 0) return { keyword, text: cleanChars(utf8(d, textStart, end - textStart)) };
   if (compressed !== 1 || method !== 0) return null;
@@ -123,8 +129,8 @@ export function stripPngGps(d, patchExif) {
   for (const c of strictChunks(d)) {
     if (c.type === 'eXIf') { parts.push(chunk('eXIf', patchExif(d.slice(c.dataStart, c.dataEnd)))); continue; }
     if (c.type === 'tEXt' || c.type === 'zTXt' || c.type === 'iTXt') {
-      const nul = d.indexOf(0, c.dataStart);
-      const keyword = nul > 0 && nul < c.dataEnd ? latin1(d, c.dataStart, nul - c.dataStart).toLowerCase() : '';
+      const nul = indexOfZero(d, c.dataStart, Math.min(c.dataEnd, c.dataStart + 80));
+      const keyword = nul > 0 ? latin1(d, c.dataStart, nul - c.dataStart).toLowerCase() : '';
       if (keyword === 'xml:com.adobe.xmp' || keyword.includes('gps') || keyword.startsWith('raw profile')) continue;
     }
     parts.push(d.subarray(c.start, c.end));

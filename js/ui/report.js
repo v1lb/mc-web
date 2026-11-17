@@ -21,6 +21,7 @@ function announceClean(result) {
   if (result.reencoded) notes.push(t('web_reencoded'));
   else if (result.removedBytes > 0) notes.push(t('web_clean_removed', fileSize(result.removedBytes)));
   else if (result.format === 'HEIC' || result.format === 'AVIF') notes.push(t('web_clean_same_size'));
+  else if (result.removedBytes === 0) notes[0] = `${t('web_nothing_to_remove')} ${result.name}`;
   if (result.removedTracks) notes.push(t('web_video_tracks_removed', result.removedTracks));
   notes.push(t('studio_msg_share_copy'));
   actions.toast(notes.join(' · '), 'ok');

@@ -118,6 +118,7 @@ export async function cleanBatch(files, progress = () => {}) {
   if (!files.length || files.length > PRO_PER_RUN) fail('BATCH_SIZE');
   if (!entitlement.isPro && files.length > perRun()) fail(perRun() === 0 ? 'DAILY_LIMIT' : 'PRO_REQUIRED', { limit: 10 });
   const result = await batch(files, progress, async (file) => {
+    if (isVideo(await formatOf(file))) fail('BATCH_PHOTOS_ONLY');
     const cleaned = await cleanFile(file, { countQuota: false });
     return { bytes: new Uint8Array(await cleaned.blob.arrayBuffer()), name: cleaned.name.replace('_clean.', '.') };
   });

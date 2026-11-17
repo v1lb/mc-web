@@ -185,6 +185,18 @@ function patched(tiffBytes) {
  */
 export function wipeGps(d, format) {
   let out;
+  try { out = wipeGpsBytes(d, format); } catch (e) {
+    if (e instanceof FormatError) throw e;
+    throw new FormatError('MALFORMED');
+  }
+  const exif = readExif(out, format);
+  const verified = !exif.gps && !exif.sections.some((s) => s.key === 'GPS');
+  if (!verified) throw new FormatError('GPS_NOT_REMOVED');
+  return { bytes: out, verified };
+}
+
+function wipeGpsBytes(d, format) {
+  let out;
   if (format === 'JPEG') {
     const tiff = jpegExif(d);
     out = sanitizeJpeg(tiff ? patchJpegExif(d, gpsPatches(tiff)) : d);
@@ -192,10 +204,7 @@ export function wipeGps(d, format) {
   else if (format === 'WEBP') out = stripWebpGps(d, patched);
   else if (format === 'HEIC' || format === 'AVIF') out = stripHeifGps(d);
   else throw new FormatError('WIPE_GPS_UNSUPPORTED');
-  const exif = readExif(out, format);
-  const verified = !exif.gps && !exif.sections.some((s) => s.key === 'GPS');
-  if (!verified) throw new FormatError('GPS_NOT_REMOVED');
-  return { bytes: out, verified };
+  return out;
 }
 
 /** Editor values that can be copied from another photo: { make, model, dateTaken, … } as strings. */

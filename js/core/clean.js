@@ -22,7 +22,12 @@ export function cleanImage(d, format) {
   const entry = CLEANERS[format];
   if (!entry) throw new FormatError('UNSUPPORTED_IMAGE');
   const [strip, isClean] = entry;
-  const out = strip(d);
+  let out;
+  try { out = strip(d); } catch (e) {
+    // A malformed file can push an offset out of bounds (RangeError): for the caller it is a format problem.
+    if (e instanceof FormatError) throw e;
+    throw new FormatError('MALFORMED');
+  }
   if (!out.length) throw new FormatError('EMPTY_RESULT');
   if (!isClean(out)) throw new FormatError('CLEAN_CHECK_FAILED');
   return out;

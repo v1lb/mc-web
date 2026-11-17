@@ -16,7 +16,7 @@ export const actions = {
   toast: (_text, _kind) => {},
   confirm: async (_options) => false,
   openPro: () => {},
-  checkFile: async (_file) => {},
+  checkFile: async (_file, _target) => {},
   openReport: (_report, _extra) => {},
   /** Runs an async operation with the busy flag and shows its error as a toast. Returns its result or null. */
   run: async (_fn) => null,

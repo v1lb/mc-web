@@ -324,3 +324,82 @@ test('damaged input never throws out of the analysis', async () => {
     try { await analyze(noisy, name); } catch (e) { assert.match(String(e), /UNSUPPORTED_FORMAT/); }
   }
 });
+
+test('video: udta with a QuickTime zero terminator is still read', async () => {
+  const source = fx('clip.mp4');
+  const buf = Buffer.from(source);
+  const moov = buf.indexOf('moov') - 4;
+  const udta = buf.indexOf('udta', moov) - 4;
+  assert.equal(udta + buf.readUInt32BE(udta), buf.length, 'fixture: udta is the last box of the file');
+  const out = Buffer.concat([buf, Buffer.alloc(4)]);
+  out.writeUInt32BE(buf.readUInt32BE(moov) + 4, moov);
+  out.writeUInt32BE(buf.readUInt32BE(udta) + 4, udta);
+  const { report } = await analyzeFile(new File([out], 'clip.mp4'));
+  assert.ok(report.gps, 'location inside udta');
+  assert.equal(field(report, 'video:title'), 'Holiday clip');
+});
+
+test('malformed files give format errors, and text chunks are scanned inside their bounds', async () => {
+  const heic = fx('gps_sample.heic');
+  for (const cut of [600, 5000, 200000]) {
+    assert.throws(() => cleanImage(heic.subarray(0, cut), 'HEIC'), (e) => e.name === 'Error' && typeof e.code === 'string');
+    assert.throws(() => wipeGps(heic.subarray(0, cut), 'HEIC'), (e) => typeof e.code === 'string');
+  }
+  for (const [name, format] of [['photo.jpg', 'JPEG'], ['ai.png', 'PNG'], ['photo.webp', 'WEBP'], ['anim.gif', 'GIF'], ['gps_sample.heic', 'HEIC']]) {
+    const noisy = fx(name).slice();
+    for (let i = 12; i < Math.min(noisy.length, 4000); i += 23) noisy[i] ^= 0xA5;
+    for (const op of [() => cleanImage(noisy, format), () => wipeGps(noisy, format)]) {
+      try { op(); } catch (e) { assert.equal(typeof e.code, 'string', `${name}: ${e}`); }
+    }
+  }
+  // A tEXt chunk without a zero byte must not be read as text, even when zeros follow in later chunks.
+  const chunk = (type, data) => { const c = new Uint8Array(12 + data.length); putU32(c, 0, data.length); c.set(ascii(type), 4); c.set(data, 8); putU32(c, 8 + data.length, crc32(c, 4, 8 + data.length)); return c; };
+  const png = fx('ai.png');
+  const bad = concat([png.subarray(0, 33), chunk('tEXt', ascii('no-terminator-here')), png.subarray(33)]);
+  const report = await analyze(bad, 'bad.png');
+  assert.deepEqual(report.pngTextItems.map((i) => i.label), ['parameters', 'Software']);
+});
+
+test('little-endian EXIF with a thumbnail: read, edit, GPS removal, cleaning', async () => {
+  const { emptyTiff, serializeTiff, asciiEntry, shortEntry, rationalEntry, byteEntry, parseTiff } = await import('../js/core/tiff.js');
+  const { sanitizeJpeg, jpegExif } = await import('../js/core/jpeg.js');
+  const t = emptyTiff();
+  t.little = true;
+  t.ifd0.set(0x010F, asciiEntry('LittleCam'));
+  t.ifd0.set(0x0112, shortEntry(8, true));
+  t.exif = new Map([[0x9003, asciiEntry('2023:12:31 23:30:00')], [0x8827, shortEntry(640, true)], [0x829A, rationalEntry([[1, 60]], true)]]);
+  t.gps = new Map([[0, byteEntry([2, 3, 0, 0])], [1, asciiEntry('S')], [2, rationalEntry([[33, 1], [51, 1], [2448, 100]], true)],
+    [3, asciiEntry('E')], [4, rationalEntry([[151, 1], [12, 1], [5508, 100]], true)]]);
+  t.ifd1 = new Map([[0x0103, shortEntry(6, true)]]);
+  t.thumbnail = fx('plain.jpg');
+  const source = sanitizeJpeg(fx('plain.jpg'), serializeTiff(t));
+
+  const report = await analyze(source, 'le.jpg');
+  assert.equal(field(report, 'exif:Make'), 'LittleCam');
+  assert.equal(field(report, 'exif:PhotographicSensitivity'), '640');
+  assert.ok(Math.abs(report.gps.latitude + 33.8568) < 1e-4 && Math.abs(report.gps.longitude - 151.2153) < 1e-4);
+  assert.ok(inspectJpeg(source).exifThumbnail);
+
+  const edited = applyPatch(source, { model: 'M2', iso: 100000, exposureSeconds: 2.5 });
+  assert.ok(edited.verified);
+  const after = parseTiff(jpegExif(edited.bytes));
+  assert.ok(after.little, 'byte order is kept');
+  assert.deepEqual([...after.thumbnail], [...fx('plain.jpg')], 'thumbnail survives the rewrite');
+  const editedReport = await analyze(edited.bytes, 'le.jpg');
+  assert.equal(field(editedReport, 'exif:Make'), 'LittleCam');
+  assert.equal(field(editedReport, 'exif:PhotographicSensitivity'), '100000');
+  assert.ok(editedReport.gps, 'GPS is untouched when the patch does not mention it');
+
+  const shifted = shiftJpegDates(source, 3600);
+  assert.equal(field(await analyze(shifted.bytes, 'le.jpg'), 'exif:DateTimeOriginal'), '2024:01:01 00:30:00');
+
+  const noGps = wipeGps(source, 'JPEG');
+  const noGpsReport = await analyze(noGps.bytes, 'le.jpg');
+  assert.equal(noGpsReport.gps, null);
+  assert.equal(field(noGpsReport, 'exif:Make'), 'LittleCam');
+
+  const clean = cleanImage(source, 'JPEG');
+  assert.ok(isStrippedJpeg(clean));
+  assert.equal(inspectJpeg(clean).exifThumbnail, false);
+  assert.equal(readExif(clean, 'JPEG').orientation, 8);
+});

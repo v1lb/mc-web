@@ -253,8 +253,8 @@ function readMeta(d, meta, tags) {
 
 /** udta: QuickTime tags (©xxx), 3GPP (loci, auth…), nested meta/ilst, Adobe XMP_. */
 function readUdta(d, udta, tags, onXmp) {
-  let kids;
-  try { kids = children(d, udta); } catch { return; }
+  // Lenient: QuickTime writers end udta with a 32-bit zero terminator, which is not a box.
+  const kids = listBoxes(d, udta.payloadStart, udta.end, true);
   for (const child of kids) {
     if (child.payloadSize > MAX_UUID_BYTES) { tags.rawBytes(`udta ${child.type}`, child.size); continue; }
     if (child.type === 'meta') readMeta(d, child, tags);

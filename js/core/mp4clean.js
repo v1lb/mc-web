@@ -215,7 +215,11 @@ export async function cleanVideo(source, mime = 'video/mp4') {
     // a range means the tables contradict each other: not worth the risk.
     const keptStarts = kept.flatMap((t) => chunkOffsets(m, t.box)).sort((a, b) => a - b);
     zero = merge(tracks.filter((t) => !KEEP_HANDLERS.has(t.handler)).flatMap((t) => chunkRanges(m, t.box)));
-    for (const [from, to] of zero) if (keptStarts.some((s) => s >= from && s < to)) fail('overlapping tracks');
+    for (const [from, to] of zero) {
+      let lo = 0, hi = keptStarts.length;
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (keptStarts[mid] < from) lo = mid + 1; else hi = mid; }
+      if (lo < keptStarts.length && keptStarts[lo] < to) fail('overlapping tracks');
+    }
     removedTracks = tracks.length - kept.length;
     moov = container('moov', moovChildren.flatMap((box) => {
       if (box.type === 'mvhd') return [raw(zeroTimes(boxBytes(m, box), box.header))];

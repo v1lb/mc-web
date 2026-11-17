@@ -21,16 +21,16 @@ const TEXT_FIELDS = [
 const NUMBER_FIELDS = [['iso', 'studio_field_iso'], ['aperture', 'studio_field_aperture'], ['exposureSeconds', 'studio_field_shutter']];
 
 /** Form values kept while the visitor moves between tabs and pages. */
-const form = { removeGps: false, values: {} };
+const form = { removeGps: false, values: {}, file: null };
 
 async function chooseSource() {
   const [file] = await pickFiles({ accept: MEDIA_ACCEPT });
-  if (file) actions.checkFile(file).then(() => actions.navigate('#/studio'));
+  if (file) actions.checkFile(file, '#/studio');
 }
 
 function sourceCard(current) {
   const zone = h('section', { class: 'card source', dataset: { drop: 'source' } });
-  zone.addEventListener('files', (e) => { if (e.detail[0]) actions.checkFile(e.detail[0]).then(() => actions.navigate('#/studio')); });
+  zone.addEventListener('files', (e) => { if (e.detail[0]) actions.checkFile(e.detail[0], '#/studio'); });
   if (!current?.file) {
     zone.append(h('p', { class: 'eyebrow' }, t('studio_source_eyebrow')), h('p', { class: 'card-lead' }, t('studio_source_none')),
       h('p', { class: 'muted' }, t('web_studio_drop')),
@@ -96,6 +96,8 @@ function pickOnGrid(apply) {
 function editTab(current, redraw) {
   if (!current?.file) return h('p', { class: 'empty' }, t('studio_batch_choose_files_first'));
   if (current.report.file.format !== 'JPEG') return h('p', { class: 'note' }, t('web_edit_jpeg_only'));
+  // Values typed for one photo must not be written into the next one.
+  if (form.file !== current.file) { form.values = {}; form.removeGps = false; form.file = current.file; }
   const now = current.exif ? editableFields(current.exif) : {};
   const shown = (key) => {
     if (now[key] == null) return null;
@@ -172,6 +174,7 @@ function editTab(current, redraw) {
 // --- Batch ---
 
 let audit = null;
+let batchErrors = [];
 let shift = { negative: false, hours: '', minutes: '' };
 
 function batchTab(redraw) {
@@ -182,12 +185,13 @@ function batchTab(redraw) {
   const errorList = h('div', {});
   const onProgress = (p) => { progress.textContent = t('studio_batch_progress', p.completed, p.total, p.succeeded, p.failed); };
   const showErrors = (errors) => {
+    batchErrors = errors;
     clear(errorList);
     if (!errors.length) return;
     errorList.append(h('p', { class: 'eyebrow eyebrow-signal' }, t('studio_batch_errors')),
       h('ul', { class: 'plain' }, errors.slice(0, 20).map((e) => h('li', { class: 'small' }, t('studio_batch_file_error', e.file, errorText(e.error))))));
   };
-  const add = (list) => { state.batchFiles = [...files, ...list].slice(0, 500); audit = null; redraw(); };
+  const add = (list) => { state.batchFiles = [...files, ...list].slice(0, 500); audit = null; batchErrors = []; redraw(); };
   const zone = h('section', { class: 'card', dataset: { drop: 'batch' } });
   zone.addEventListener('files', (e) => add(e.detail));
 
@@ -197,9 +201,9 @@ function batchTab(redraw) {
     if (!result) return;
     if (result.zip) saveBlob(result.zip, 'metacheck-clean.zip');
     actions.toast(t('studio_msg_batch_done', result.succeeded, result.failed), result.failed ? 'error' : 'ok');
-    showErrors(result.errors);
+    batchErrors = result.errors;
     state.batchFiles = files.slice(run.length);
-    if (!result.failed) redraw();
+    redraw();
   };
 
   append(zone,
@@ -207,8 +211,8 @@ function batchTab(redraw) {
     h('p', {}, t('studio_batch_text')),
     h('p', { class: 'muted small' }, t('studio_batch_free_note', FREE_PER_RUN, PRO_PER_RUN)),
     h('div', { class: 'row' },
-      h('button', { class: 'btn', type: 'button', onclick: async () => add(await pickFiles({ accept: MEDIA_ACCEPT, multiple: true })) }, t('studio_batch_choose_photos')),
-      files.length ? h('button', { class: 'btn btn-ghost', type: 'button', onclick: () => { state.batchFiles = []; audit = null; redraw(); } }, t('web_batch_clear')) : null),
+      h('button', { class: 'btn', type: 'button', onclick: async () => add(await pickFiles({ accept: 'image/*,.heic,.heif,.avif', multiple: true })) }, t('studio_batch_choose_photos')),
+      files.length ? h('button', { class: 'btn btn-ghost', type: 'button', onclick: () => { state.batchFiles = []; audit = null; batchErrors = []; redraw(); } }, t('web_batch_clear')) : null),
     h('p', { class: 'mono' }, t('studio_batch_selected', files.length), files.length ? ` · ${t('studio_batch_run_size', run.length)}` : ''),
     files.length ? h('ul', { class: 'file-list' }, files.slice(0, 12).map((f, i) => h('li', { class: i < run.length ? '' : 'is-waiting' },
       h('span', { class: 'file-name' }, f.name), h('span', { class: 'mono small muted' }, fileSize(f.size)))),
@@ -226,6 +230,7 @@ function batchTab(redraw) {
     const result = await actions.run(() => auditFolder(list, (n) => { auditStatus.textContent = t('studio_audit_running', n); }));
     if (!result) { auditStatus.textContent = t('studio_audit_failed'); return; }
     audit = result;
+    batchErrors = [];
     state.batchFiles = result.findings.map((f) => f.file);
     redraw();
   };
@@ -279,6 +284,7 @@ function batchTab(redraw) {
     h('button', { class: 'btn', type: 'button', onclick: runShift }, t('web_shift_run')),
     shiftStatus);
 
+  showErrors(batchErrors);
   return h('div', { class: 'stack' }, zone, h('div', { class: 'two-col' }, auditCard, shiftCard));
 }
 

@@ -129,13 +129,14 @@ function setCurrent(next) {
   state.current = next;
 }
 
-actions.openReport = (report, extra = {}) => {
+actions.openReport = (report, extra = {}, target = '#/report') => {
   setCurrent({ file: null, report, exif: null, previewUrl: null, historyId: null, ...extra });
   state.reportTab = 'analysis';
-  if (location.hash === '#/report') actions.render(); else actions.navigate('#/report');
+  actions.navigate(target);
 };
 
-actions.checkFile = async (file) => {
+/** [target]: the page to show after a successful check (the studio opens files without leaving). */
+actions.checkFile = async (file, target = '#/report') => {
   if (!file) return;
   if (state.busy) { actions.toast(t('main_msg_busy')); return; }
   state.busy = true;
@@ -145,10 +146,10 @@ actions.checkFile = async (file) => {
     const entry = addHistory(report);
     const previewUrl = URL.createObjectURL(file);
     state.busy = false;
-    actions.openReport(report, { file, exif, previewUrl, historyId: entry?.id ?? null, isVideo: isVideo(report.file.format) });
+    actions.openReport(report, { file, exif, previewUrl, historyId: entry?.id ?? null, isVideo: isVideo(report.file.format) }, target);
   } catch (error) {
     state.busy = false;
-    console.error(error);
+    if (error?.code !== 'UNSUPPORTED_FORMAT') console.error(error);
     renderError(error?.code === 'UNSUPPORTED_FORMAT' ? t('error_unsupported_format') : t('main_error_read_file'));
   }
 };
@@ -199,7 +200,7 @@ function rail(route) {
 
 function mount(content, route) {
   view = h('main', { class: 'view', id: 'view', tabindex: '-1' }, content);
-  clear(root).append(h('a', { class: 'skip', href: '#view' }, t('web_skip_to_content')), h('div', { class: 'shell' }, rail(route), view), toasts, dialogs);
+  clear(root).append(h('a', { class: 'skip', href: '#view' }, t('web_skip_to_content')), h('div', { class: 'shell' }, rail(route), view));
 }
 
 function currentRoute() {
@@ -230,6 +231,13 @@ actions.navigate = (hash) => { if (location.hash === hash) actions.render(); els
 
 addEventListener('hashchange', () => { actions.render(); scrollTo(0, 0); view?.focus({ preventScroll: true }); });
 
+// A link to the page already in the address bar does not fire hashchange (the loading and error screens keep
+// the old address), so such clicks re-render directly.
+addEventListener('click', (e) => {
+  const link = e.target.closest?.('a[href^="#/"]');
+  if (link && link.getAttribute('href') === (location.hash || '#/') && !state.busy) { e.preventDefault(); actions.render(); }
+});
+
 // --- Drag and drop, paste ---
 
 let dragDepth = 0;
@@ -256,6 +264,8 @@ addEventListener('paste', (e) => {
 
 // --- Start ---
 
+// Toasts and dialogs live outside the re-rendered tree: a render must not close an open dialog or replay toasts.
+document.body.append(toasts, dialogs);
 applyTheme();
 applyLanguage();
 actions.render();
