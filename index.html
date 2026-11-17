@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MetaCheck · Photo and video metadata inspector</title>
+  <meta name="description" content="See what a photo or video reveals: location, camera, author and AI labels in its metadata. Remove them before you send. Everything runs in your browser, nothing is uploaded.">
+  <meta name="theme-color" content="#F4F1EA">
+  <meta name="color-scheme" content="light dark">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' blob: data: https://tile.openstreetmap.org; media-src 'self' blob:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; form-action 'none'">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta property="og:title" content="MetaCheck">
+  <meta property="og:description" content="What does your photo reveal? Check and remove metadata right in the browser.">
+  <meta property="og:type" content="website">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="preload" href="fonts/plex_sans_regular.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="stylesheet" href="css/app.css">
+  <script type="module" src="js/ui/app.js"></script>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="print-root" aria-hidden="true"></div>
+  <noscript><p class="noscript">MetaCheck reads files with JavaScript in your browser. Please enable JavaScript to use it.</p></noscript>
+</body>
+</html>
